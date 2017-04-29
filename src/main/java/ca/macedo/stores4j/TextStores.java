@@ -510,7 +510,6 @@ public class TextStores {
 			};
 		}
 	}
-	static String SCAN_POINTER_START = redis.clients.jedis.ScanParams.SCAN_POINTER_START; 
 	
 	public class FileStore extends TextStore{
 		public FileStore(File folder){
