@@ -475,7 +475,7 @@ public class BinStores {
 		@Override
 		public Collection<String> list() {
 			LinkedList<String> out=new LinkedList<String>();
-			for(File f : folder.listFiles()) if(baseFilter.match(f.getName())) out.add(f.getName());
+			for(File f : folder.listFiles()) if(f.isFile() && baseFilter.match(f.getName())) out.add(f.getName());
 			return out;
 		}
 		@Override
