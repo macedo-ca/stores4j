@@ -159,7 +159,7 @@ As seen above, any URI can include a reference to a secret instead of hard-coded
 - TextStores.addSecretsSource(Function<String,String>)
 
 ## Using BinStores
-To use stores4j framework, create a new instance of BinStores class. The BinStores factory class creates BinStore instances, where a BinStore represents access to a storage location. BinStore instance are created by calling getStore(String) method, passing in the full URI of the desired store. The prefix of the URI determines the type of store to be created. 
+To use the binary storage of the stores4j framework, create a new instance of BinStores class. The BinStores factory class creates BinStore instances, where a BinStore represents access to a storage location. BinStore instance are created by calling getStore(String) method, passing in the full URI of the desired store. The prefix of the URI determines the type of store to be created. 
 ```java
 BinStores binStores=new BinStores();
 BinStore fileStore = binStores.getStore("file://C:/temp/");
@@ -215,4 +215,42 @@ fileStore.copyTo(fileStoreCopy);
 // The difference between copy and replica is that replica removes any entries in the target that is not found in the source.
 BinStore fileStoreReplica = binStores.getStore("file://C:/temp/replicaOfTemp/");
 fileStore.replicateTo(fileStoreReplica);
+```
+
+## Using TextStores
+To use the text (string) storage of the stores4j framework, create a new instance of TextStores class. The TextStores factory class creates TextStore instances, where a TextStore represents access to a storage location. TextStore instance are created by calling getStore(String) method, passing in the full URI of the desired store. The prefix of the URI determines the type of store to be created. 
+```java
+// 0. Create store instance
+TextStores binStores=new TextStores();
+TextStore fileStore = binStores.getStore("file://C:/temp/");
+
+// 1. List / Filter - Get a listing / Filtered listing of entry IDs
+for(String id : fileStore.list()) System.out.println(id);
+for(String id : fileStore.filter("*.txt")) System.out.println(id);
+
+// 2. Read / Write bytes
+String textfileData=fileStore.item("test.txt").getContent();
+fileStore.item("test_copy.txt").setContent(textfileData.toUpperCase());
+
+// 3. Bulk operation - Copy
+TextStore textStoreCopy = binStores.getStore("file://C:/temp/copyOfTextTemp/");
+fileStore.copyTo(textStoreCopy,"*.txt");
+```
+
+## Using JsonStore
+To use the JSON storage of the stores4j framework, create a new instance of TextStores class. The TextStores factory class creates JsonStore instances, where a JsonStore represents access to a storage location of JSON documents. JsonStore instance are created by calling getJsonStore(String) method, passing in the full URI of the desired store. The prefix of the URI determines the type of store to be created.
+```java
+// 0. Create store instance
+TextStores txtStores = new TextStores();
+JsonStore  jsonStore = txtStores.getJsonStore("file://C:/temp/json/");
+
+// 1. List / Filter - Get a listing / Filtered listing of entry IDs
+JSONArray list = jsonStore.list();
+System.out.println(list.toJSONString());
+JSONArray filtered = jsonStore.filter("*.json");
+System.out.println(filtered.toJSONString());
+
+// 2. Read / Write JSON documents
+JSONObject textfileData=jsonStore.item("test.json").getContent();
+jsonStore.item("test_copy.json").setContent(textfileData.get("content"));
 ```
