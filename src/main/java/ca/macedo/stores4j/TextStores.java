@@ -360,9 +360,7 @@ public class TextStores {
 		public abstract Collection<String> list();
 		public abstract boolean has(String id);
 		public Collection<String> filter(String filter) {
-			LinkedList<String> out=new LinkedList<String>();
-			for(String k : list()) if(k.startsWith(filter)) out.add(k);
-			return out;
+			return BaseStore.prepareFilter("",filter,"",suffix).filter(list());
 		}
 		public void copyTo(TextStore store){
 			Collection<String> list=list();

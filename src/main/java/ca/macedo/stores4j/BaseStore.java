@@ -33,7 +33,10 @@ public class BaseStore {
 	
 	protected Filter baseFilter=new Filter();
 	
-	protected Filter prepareFilter(String storeTypePrefix, String filter){
+	public Filter prepareFilter(String storeTypePrefix, String filter){
+		return prepareFilter(storeTypePrefix, filter, prefix, suffix0);
+	}
+	public static Filter prepareFilter(String storeTypePrefix, String filter, String prefix, String suffix0){
 		Filter f=new Filter();
 		int staridx=filter.indexOf('*');
 		if(staridx>-1){
@@ -49,7 +52,7 @@ public class BaseStore {
 		return f;
 	}
 	
-	protected class Filter{
+	public static class Filter{
 		protected boolean all(){
 			return filterPrefix==null && filterSuffix==null;
 		}
