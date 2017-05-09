@@ -16,7 +16,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedList;
+import java.util.function.Consumer;
 
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -112,6 +114,10 @@ public class BinStoresWithS3 extends BinStores{
 			return s3Client.doesObjectExist(bucket, folder+id);
 		}
 		@Override
+		public boolean supportsLoading() {
+			return true;
+		}
+		@Override
 		public BinRef item(final String id) {
 			return new BinRef() {
 				String key=folder+id;
@@ -144,6 +150,25 @@ public class BinStoresWithS3 extends BinStores{
 					s3Client.putObject(bucket, key, st, md);
 				}
 				@Override
+				public boolean supportsLoading() {
+					return true;
+				}
+				@Override
+				public void load(Consumer<LoadedBinary> consumer) throws IOException {
+					S3Object obj=s3Client.getObject(bucket, key);
+					ObjectMetadata md=obj.getObjectMetadata();
+					LoadedBinary lb=new LoadedBinary();
+					lb.setId(id);
+					lb.setStore(S3FileStore.this);
+					lb.visit=visit;
+					lb.setLength(md.getInstanceLength());
+					lb.setEtag(md.getETag());
+					Date d=md.getLastModified();
+					lb.setLastModified(d!=null ? d.getTime() : null);
+					lb.setInputStream(obj.getObjectContent());
+					consumer.accept(lb);
+				}
+				@Override
 				public OutputStream setContentStream() throws IOException {
 					return new ByteArrayOutputStream(){
 						@Override
@@ -169,6 +194,21 @@ public class BinStoresWithS3 extends BinStores{
 					if(has(id)) return false;
 					setContent(content);
 					return true;
+				}
+				@Override
+				public long getLastModified() {
+					ObjectMetadata md=s3Client.getObjectMetadata(bucket, key);
+					return md.getLastModified().getTime();
+				}
+				@Override
+				public String getETag() {
+					ObjectMetadata md=s3Client.getObjectMetadata(bucket, key);
+					return md.getETag();
+				}
+				@Override
+				public long getLength() {
+					ObjectMetadata md=s3Client.getObjectMetadata(bucket, key);
+					return md.getInstanceLength();
 				}
 			};
 		}

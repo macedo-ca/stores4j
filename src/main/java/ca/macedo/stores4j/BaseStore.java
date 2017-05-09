@@ -11,7 +11,10 @@
 package ca.macedo.stores4j;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedList;
+
+import ca.macedo.stores4j.BinStores.BinStore;
 
 public class BaseStore {
 	public String getPrefix() {
@@ -51,7 +54,63 @@ public class BaseStore {
 		}
 		return f;
 	}
-	
+	public class MetaData{
+		BaseStore store=null;
+		String id=null;
+		Long lastModified=null;
+		String etag=null;
+		Long length=null;
+		HashMap<String,String> other=null;
+		
+		BinStore binStore(){
+			return (BinStore)store;
+		}
+
+		public void setStore(BaseStore store) {
+			this.store = store;
+		}
+
+		public String getId() {
+			return id;
+		}
+
+		public void setId(String id) {
+			this.id = id;
+		}
+
+		public Long getLastModified() {
+			return lastModified;
+		}
+
+		public void setLastModified(Long lastModified) {
+			this.lastModified = lastModified;
+		}
+
+		public String getEtag() {
+			return etag;
+		}
+
+		public void setEtag(String etag) {
+			this.etag = etag;
+		}
+
+		public Long getLength() {
+			return length;
+		}
+
+		public void setLength(Long length) {
+			this.length = length;
+		}
+
+		public HashMap<String, String> getOther() {
+			return other;
+		}
+
+		public void setOther(HashMap<String, String> other) {
+			this.other = other;
+		}
+	}
+
 	public static class Filter{
 		protected boolean all(){
 			return filterPrefix==null && filterSuffix==null;

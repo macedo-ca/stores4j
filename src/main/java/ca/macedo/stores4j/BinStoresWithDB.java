@@ -19,8 +19,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.Collection;
 import java.util.LinkedList;
+import java.util.function.Consumer;
 
 import javax.sql.DataSource;
 
@@ -151,6 +153,10 @@ public class BinStoresWithDB extends BinStores {
 				close(con, null, null);
 			}
 		}
+		@Override
+		public boolean supportsLoading() {
+			return true;
+		}
 		
 		@Override
 		public BinRef item(final String id) {
@@ -276,6 +282,91 @@ public class BinStoresWithDB extends BinStores {
 					}
 				}
 				@Override
+				public boolean supportsLoading() {
+					return true;
+				}
+				@Override
+				public void load(Consumer<LoadedBinary> consumer) throws IOException {
+					LoadedBinary lb=new LoadedBinary();
+					lb.id=fileName;
+					lb.visit=visit;
+					lb.store=DBBinStore.this;
+					PreparedStatement ps=null;
+					ResultSet rs=null;
+					Connection con = null;
+					try{
+						con=inVisit() ? visitAs(DBVisit.class).con : getCon();
+						String sql="SELECT LENGTH("+n.DATA+") as LE,"+n.UPDATED+","+n.DATA+" FROM "+n.TABLE+" WHERE "+n.GROUP+"=? AND "+n.NAME+"=? "+(folder!=null?" AND "+n.FOLDER+"=?":"");
+						ps=con.prepareStatement(sql);
+						ps.setString(1, fileGroup);
+						ps.setString(2, fileName);
+						if(folder!=null) ps.setString(3, folder);
+						rs=ps.executeQuery();
+						if(rs.next()){
+							lb.setLength(rs.getLong(1));
+							Timestamp ts=rs.getTimestamp(2);
+							lb.setLastModified(ts!=null ? ts.getTime() : null);
+							lb.setInputStream(rs.getBinaryStream(3));
+							consumer.accept(lb);
+						}
+					}catch(SQLException e){
+						throw new IOException(e);
+					}finally{
+						if(inVisit()) con=null;
+						close(con,ps,null);
+					}
+				}
+				@Override
+				public long getLength() {
+					PreparedStatement ps=null;
+					ResultSet rs=null;
+					Connection con = null;
+					try{
+						con=inVisit() ? visitAs(DBVisit.class).con : getCon();
+						String sql="SELECT LENGTH("+n.DATA+") as LE FROM "+n.TABLE+" WHERE "+n.GROUP+"=? AND "+n.NAME+"=? "+(folder!=null?" AND "+n.FOLDER+"=?":"");
+						ps=con.prepareStatement(sql);
+						ps.setString(1, fileGroup);
+						ps.setString(2, fileName);
+						if(folder!=null) ps.setString(3, folder);
+						rs=ps.executeQuery();
+						if(rs.next()){
+							long len=rs.getLong(1);
+							return len;
+						}
+						return 0;
+					}catch(SQLException e){
+						throw new RuntimeException(e);
+					}finally{
+						if(inVisit()) con=null;
+						close(con,ps,null);
+					}
+				}
+				@Override
+				public long getLastModified() {
+					PreparedStatement ps=null;
+					ResultSet rs=null;
+					Connection con = null;
+					try{
+						con=inVisit() ? visitAs(DBVisit.class).con : getCon();
+						String sql="SELECT "+n.UPDATED+" FROM "+n.TABLE+" WHERE "+n.GROUP+"=? AND "+n.NAME+"=? "+(folder!=null?" AND "+n.FOLDER+"=?":"");
+						ps=con.prepareStatement(sql);
+						ps.setString(1, fileGroup);
+						ps.setString(2, fileName);
+						if(folder!=null) ps.setString(3, folder);
+						rs=ps.executeQuery();
+						if(rs.next()){
+							Timestamp len=rs.getTimestamp(1);
+							return len.getTime();
+						}
+						return 0;
+					}catch(SQLException e){
+						throw new RuntimeException(e);
+					}finally{
+						if(inVisit()) con=null;
+						close(con,ps,null);
+					}
+				}
+				@Override
 				public boolean createWithContent(byte[] content) throws IOException {
 					PreparedStatement ps=null;
 					Connection con = null;
@@ -350,7 +441,7 @@ public class BinStoresWithDB extends BinStores {
 						if(folder!=null) ps.setString(3, folder);
 						rs = ps.executeQuery();
 						if(!rs.next()){
-							BinStoresWithDB.this.close(null,ps,rs);
+							BinStoresWithDB.close(null,ps,rs);
 							String sql="INSERT INTO "+n.TABLE+" ("+n.CREATED+","+n.UPDATED+","+n.ID+","+n.GROUP+","+n.NAME+","+n.SIZE+","+n.DATA+"" +(folder!=null?","+n.FOLDER+"":"")+" VALUES (SYSDATE,SYSDATE,?,?,?,0,EMPTY_BLOB()" +(folder!=null?",?":"")+")";
 							ps= con.prepareStatement(sql);
 							ps.setString(1, guid(32));
@@ -373,7 +464,7 @@ public class BinStoresWithDB extends BinStores {
 							@Override
 							public void close() throws IOException {
 								super.close();
-								BinStoresWithDB.this.close(lclCon,lclPS,lclRS);
+								BinStoresWithDB.close(lclCon,lclPS,lclRS);
 							}
 						};
 						return os;
@@ -391,7 +482,7 @@ public class BinStoresWithDB extends BinStores {
 			};
 		}
 	}
-	void close(Connection con,PreparedStatement ps, ResultSet rs) {
+	public static void close(Connection con,PreparedStatement ps, ResultSet rs) {
 		try{if(rs!=null)rs.close();}catch(Throwable t){}
 		try{if(ps!=null)ps.close();}catch(Throwable t){}
 		try{if(con!=null)con.close();}catch(Throwable t){}

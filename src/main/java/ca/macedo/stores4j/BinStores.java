@@ -60,6 +60,7 @@ public class BinStores {
 			log.debug("Reason that AWS S3 is not being available is ",e);
 		}
 	}
+	public static Extensions<BinStore,BinStores> EXTENSIONS=new Extensions<BinStore,BinStores>();
 	
 	public BinStores(){}
 	
@@ -83,39 +84,39 @@ public class BinStores {
 		if(uri.toLowerCase().startsWith("file:")){
 			uri=after(uri, "file:");
 			File folder=new File(uri);
-			return new FileStore(folder);
+			return new FileStore(folder).initialize(this);
 		}else if(uri.toLowerCase().startsWith("mem:")){
 			uri=after(uri, "mem:");
 			MemoryStore ms= memStores.get(uri);
 			if(ms==null){
 				memStores.put(uri, ms=new MemoryStore(uri));
 			}
-			return ms;
+			return ms.initialize(this);
 		}else if(uri.toLowerCase().startsWith("db:")){
 			uri=uri.toLowerCase().startsWith("db://") ? after(uri, "db://"): after(uri, "db:");
 			if(uri.contains(":")){
 				String grp = uri.substring(0, uri.indexOf(':'));
 				String conStr = uri.substring(uri.indexOf(':')+1);
-				return BinStoresWithDB.newDBStore(conStr, grp);
+				return BinStoresWithDB.newDBStore(conStr, grp).initialize(this);
 			}else{
 				String grp=uri;
 				String conStr = defaultCredentials("db");
-				return BinStoresWithDB.newDBStore(conStr, grp);
+				return BinStoresWithDB.newDBStore(conStr, grp).initialize(this);
 			}
 		}else if(uri.toLowerCase().startsWith("smb:")){
 			if(sambaFactory!=null){
-				return sambaFactory.extendedGetStore(this,uri);
+				return sambaFactory.extendedGetStore(this,uri).initialize(this);
 			}else{
 				log.error("Samba is not available");
 			}
 		}else if(uri.toLowerCase().startsWith("s3:")){
 			if(s3Factory!=null){
-				return s3Factory.extendedGetStore(this,uri);
+				return s3Factory.extendedGetStore(this,uri).initialize(this);
 			}else{
 				log.error("AWS S3 is not available");
 			}
 		}
-		return null;
+		return EXTENSIONS.tryCreate(this, uri);
 	}
 	protected static String after(String text, String after) {
         if (!text.contains(after)) {
@@ -178,7 +179,13 @@ public class BinStores {
 
 	int largeSize=1024*32;
 	
-	public abstract class BinStore extends BaseStore{
+	public static abstract class BinStore extends BaseStore{
+		int largeSize=1024*32;
+		protected BinStore initialize(BinStores stores){
+			this.largeSize=stores.largeSize;
+			return this;
+		}
+		
 		public abstract BinStore folder(String name);
 		public abstract Collection<String> list();
 		public abstract boolean has(String id);
@@ -351,6 +358,10 @@ public class BinStores {
 			out.visit=visit;
 			return out;
 		}
+		public boolean supportsLoading(){
+			return false;
+		}
+		
 		public abstract BinRef item(String id);
 		public abstract class BinRef{
 			@SuppressWarnings("unchecked")
@@ -360,10 +371,36 @@ public class BinStores {
 			protected boolean inVisit(){
 				return visit!=null;
 			}
+			public class LoadedBinary extends MetaData{
+				BinStoreVisit visit=null;
+				InputStream is=null;
+				public InputStream getInputStream() {
+					return is;
+				}
+				public void setInputStream(InputStream is) {
+					this.is = is;
+				}
+			}
+			public boolean supportsLoading(){
+				return false;
+			}
+			public void load(Consumer<LoadedBinary> consumer) throws IOException {
+				throw new RuntimeException("Not supported by "+this.getClass().getName());
+			}
+			
 			BinStoreVisit visit=null;
 			public abstract String getID();
 			public  InputStream getContentStream() throws IOException{
 				return new ByteArrayInputStream(getContent());
+			}
+			public long getLength(){
+				throw new RuntimeException("Not supported by "+this.getClass().getName());
+			}
+			public long getLastModified(){
+				throw new RuntimeException("Not supported by "+this.getClass().getName());
+			}
+			public String getETag(){
+				throw new RuntimeException("Not supported by "+this.getClass().getName());
 			}
 			
 			public abstract byte[] getContent() throws IOException;
@@ -456,6 +493,10 @@ public class BinStores {
 					Object o = map.putIfAbsent(id, content);
 					return o==null;
 				}
+				@Override
+				public long getLength() {
+					return getContent()!=null ? getContent().length : 0L;
+				}
 			};
 		}
 	}
@@ -475,7 +516,7 @@ public class BinStores {
 		@Override
 		public Collection<String> list() {
 			LinkedList<String> out=new LinkedList<String>();
-			for(File f : folder.listFiles()) if(f.isFile() && baseFilter.match(f.getName())) out.add(f.getName());
+			for(File f : folder.listFiles()) if(baseFilter.match(f.getName())) out.add(f.getName());
 			return out;
 		}
 		@Override
@@ -500,6 +541,8 @@ public class BinStores {
 				}
 				@Override
 				public void setContent(byte[] content)throws IOException {
+					File prnt=file.getParentFile();
+					if(!prnt.exists()) prnt.mkdirs();
 					try (FileOutputStream fw=new FileOutputStream(file)){
 						fw.write(content);
 					}
@@ -511,6 +554,8 @@ public class BinStores {
 				}
 				@Override
 				public OutputStream setContentStream() throws IOException {
+					File prnt=file.getParentFile();
+					if(!prnt.exists()) prnt.mkdirs();
 					return new FileOutputStream(file,false);
 				}
 				@Override
@@ -526,6 +571,14 @@ public class BinStores {
 					if(file.exists()) return false;
 					setContent(content);
 					return true;
+				}
+				@Override
+				public long getLastModified() {
+					return file.lastModified();
+				}
+				@Override
+				public long getLength() {
+					return file.length();
 				}
 			};
 		}

@@ -179,6 +179,22 @@ public class BinStoresWithSamba extends BinStores{
 						return false;
 					}
 				}
+				@Override
+				public long getLastModified() {
+					try {
+						return file.lastModified();
+					} catch (SmbException e) {
+						throw new RuntimeException(e);
+					}
+				}
+				@Override
+				public long getLength() {
+					try {
+						return file.length();
+					} catch (SmbException e) {
+						throw new RuntimeException(e);
+					}
+				}
 			};
 		}
 	}
