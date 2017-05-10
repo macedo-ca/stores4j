@@ -140,6 +140,13 @@ public class BinStoresWithS3 extends BinStores{
 					other.setContentStream(obj.getObjectContent(), len);
 				}
 				@Override
+				public void setContentStream(InputStream st, Long lengthIfKnown, Long lastMod) throws IOException {
+					ObjectMetadata md=new ObjectMetadata();
+					if(lengthIfKnown!=null) md.setContentLength(lengthIfKnown);
+					if(lastMod!=null) md.setLastModified(new Date(lastMod));
+					s3Client.putObject(bucket, key, st, md);
+				}
+				@Override
 				public void setContent(byte[] content)throws IOException {
 					setContentStream(new ByteArrayInputStream(content), content.length);
 				}
@@ -154,7 +161,7 @@ public class BinStoresWithS3 extends BinStores{
 					return true;
 				}
 				@Override
-				public void load(Consumer<LoadedBinary> consumer) throws IOException {
+				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
 					S3Object obj=s3Client.getObject(bucket, key);
 					ObjectMetadata md=obj.getObjectMetadata();
 					LoadedBinary lb=new LoadedBinary();
@@ -196,7 +203,7 @@ public class BinStoresWithS3 extends BinStores{
 					return true;
 				}
 				@Override
-				public long getLastModified() {
+				public Long getLastModified() {
 					ObjectMetadata md=s3Client.getObjectMetadata(bucket, key);
 					return md.getLastModified().getTime();
 				}
@@ -206,7 +213,7 @@ public class BinStoresWithS3 extends BinStores{
 					return md.getETag();
 				}
 				@Override
-				public long getLength() {
+				public Long getLength() {
 					ObjectMetadata md=s3Client.getObjectMetadata(bucket, key);
 					return md.getInstanceLength();
 				}

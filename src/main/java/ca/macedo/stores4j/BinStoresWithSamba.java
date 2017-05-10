@@ -15,7 +15,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedList;
+import java.util.function.Consumer;
 
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
@@ -112,6 +114,10 @@ public class BinStoresWithSamba extends BinStores{
 			}
 		}
 		@Override
+		public boolean supportsLoading() {
+			return true;
+		}
+		@Override
 		public BinRef item(final String id) {
 			return new BinRef() {
 				SmbFile file=null;
@@ -152,6 +158,33 @@ public class BinStoresWithSamba extends BinStores{
 					}
 				}
 				@Override
+				public boolean supportsLoading() {
+					return true;
+				}
+				@Override
+				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
+					LoadedBinary lb = new LoadedBinary();
+					lb.setLastModified(file.lastModified());
+					try(InputStream data=file.getInputStream()){
+						lb.store=SmbFileStore.this;
+						lb.setId(id);
+						lb.setInputStream(data);
+						lb.setLength(file.length());
+						consumer.accept(lb);
+					}
+				}
+				@Override
+				public void setContentStream(InputStream st, Long lengthIfKnown, Long lastMod) throws IOException {
+					try(OutputStream os=setContentStream()){
+						if(lengthIfKnown!=null && lengthIfKnown>(largeSize)){
+							IOUtils.copyLarge(st, os,0,lengthIfKnown,new byte[largeSize]);
+						}else{
+							IOUtils.copy(st, os);
+						}
+						if(lastMod!=null) file.setLastModified((lastMod));
+					}
+				}
+				@Override
 				public boolean createWithContent(byte[] content) throws IOException {
 					if(has(id)) return false;
 					setContent(content);
@@ -180,7 +213,7 @@ public class BinStoresWithSamba extends BinStores{
 					}
 				}
 				@Override
-				public long getLastModified() {
+				public Long getLastModified() {
 					try {
 						return file.lastModified();
 					} catch (SmbException e) {
@@ -188,7 +221,7 @@ public class BinStoresWithSamba extends BinStores{
 					}
 				}
 				@Override
-				public long getLength() {
+				public Long getLength() {
 					try {
 						return file.length();
 					} catch (SmbException e) {

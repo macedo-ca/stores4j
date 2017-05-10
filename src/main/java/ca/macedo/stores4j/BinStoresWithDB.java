@@ -286,7 +286,7 @@ public class BinStoresWithDB extends BinStores {
 					return true;
 				}
 				@Override
-				public void load(Consumer<LoadedBinary> consumer) throws IOException {
+				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
 					LoadedBinary lb=new LoadedBinary();
 					lb.id=fileName;
 					lb.visit=visit;
@@ -317,7 +317,7 @@ public class BinStoresWithDB extends BinStores {
 					}
 				}
 				@Override
-				public long getLength() {
+				public Long getLength() {
 					PreparedStatement ps=null;
 					ResultSet rs=null;
 					Connection con = null;
@@ -333,7 +333,7 @@ public class BinStoresWithDB extends BinStores {
 							long len=rs.getLong(1);
 							return len;
 						}
-						return 0;
+						return null;
 					}catch(SQLException e){
 						throw new RuntimeException(e);
 					}finally{
@@ -342,7 +342,7 @@ public class BinStoresWithDB extends BinStores {
 					}
 				}
 				@Override
-				public long getLastModified() {
+				public Long getLastModified() {
 					PreparedStatement ps=null;
 					ResultSet rs=null;
 					Connection con = null;
@@ -358,7 +358,7 @@ public class BinStoresWithDB extends BinStores {
 							Timestamp len=rs.getTimestamp(1);
 							return len.getTime();
 						}
-						return 0;
+						return null;
 					}catch(SQLException e){
 						throw new RuntimeException(e);
 					}finally{
@@ -442,7 +442,7 @@ public class BinStoresWithDB extends BinStores {
 						rs = ps.executeQuery();
 						if(!rs.next()){
 							BinStoresWithDB.close(null,ps,rs);
-							String sql="INSERT INTO "+n.TABLE+" ("+n.CREATED+","+n.UPDATED+","+n.ID+","+n.GROUP+","+n.NAME+","+n.SIZE+","+n.DATA+"" +(folder!=null?","+n.FOLDER+"":"")+" VALUES (SYSDATE,SYSDATE,?,?,?,0,EMPTY_BLOB()" +(folder!=null?",?":"")+")";
+							String sql="INSERT INTO "+n.TABLE+" ("+n.CREATED+","+n.UPDATED+","+n.ID+","+n.GROUP+","+n.NAME+","+n.SIZE+","+n.DATA+"" +(folder!=null?","+n.FOLDER+"":"")+") VALUES (SYSDATE,SYSDATE,?,?,?,0,EMPTY_BLOB()" +(folder!=null?",?":"")+")";
 							ps= con.prepareStatement(sql);
 							ps.setString(1, guid(32));
 							ps.setString(2, fileGroup);
@@ -455,9 +455,10 @@ public class BinStoresWithDB extends BinStores {
 							ps.setString(2, fileName);
 							if(folder!=null) ps.setString(3, folder);
 							rs = ps.executeQuery();
+							rs.next();
 						}
 						binary = rs.getBlob(1);
-						final Connection lclCon=con;
+						final Connection lclCon=(!inVisit() ? con : null);
 						final PreparedStatement lclPS=ps;
 						final ResultSet lclRS=rs;
 						os = new BufferedOutputStream(binary.setBinaryStream(0)){

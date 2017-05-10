@@ -250,7 +250,8 @@ public class BinStores {
 					store.runVisit((storeVisit)->{
 						Collection<String> list=list(visit);
 						for(String s : list){
-							item(visit,s).copyTo(store.item(storeVisit,s));
+							System.out.println(s);
+							store.item(storeVisit,s).copyFrom(item(visit,s));
 						}
 						ArrayList<BinRef> deletes=new ArrayList<>();
 						store.forEach0(storeVisit, existingRec->{
@@ -275,7 +276,7 @@ public class BinStores {
 					store.runVisit((storeVisit)->{
 						Collection<String> list=list(visit);
 						for(String s : list){
-							item(visit,s).copyTo(store.item(storeVisit,s));
+							store.item(storeVisit,s).copyFrom(item(visit,s));
 						}
 					});
 				});
@@ -291,7 +292,7 @@ public class BinStores {
 					store.runVisit((storeVisit)->{
 						Collection<String> list=filter(filter);
 						for(String s : list){
-							store.item(storeVisit,s).setContent(item(visit,s).getContent());
+							store.item(storeVisit,s).copyFrom(item(visit,s));
 						}
 					});
 				});
@@ -384,7 +385,7 @@ public class BinStores {
 			public boolean supportsLoading(){
 				return false;
 			}
-			public void load(Consumer<LoadedBinary> consumer) throws IOException {
+			public void consume(Consumer<LoadedBinary> consumer) throws IOException {
 				throw new RuntimeException("Not supported by "+this.getClass().getName());
 			}
 			
@@ -393,18 +394,36 @@ public class BinStores {
 			public  InputStream getContentStream() throws IOException{
 				return new ByteArrayInputStream(getContent());
 			}
-			public long getLength(){
-				throw new RuntimeException("Not supported by "+this.getClass().getName());
+			public Long getLength(){
+				return null;
 			}
-			public long getLastModified(){
-				throw new RuntimeException("Not supported by "+this.getClass().getName());
+			public Long getLastModified(){
+				return null;
 			}
 			public String getETag(){
-				throw new RuntimeException("Not supported by "+this.getClass().getName());
+				return null;
 			}
 			
 			public abstract byte[] getContent() throws IOException;
 			public abstract void setContent(byte[] content) throws IOException;
+			public void copyFrom(BinRef other) throws IOException {
+				if(other.supportsLoading()){
+					other.consume(bin ->{
+						try {
+							setContentStream(other.getContentStream(),bin.getLength(),bin.getLastModified());
+						} catch (IOException e) {
+							throw new RuntimeException(e);
+						}
+					});
+				}else{
+					Long lengthIfKnown = other.getLength();
+					Long lastMod = other.getLastModified();
+					setContentStream(other.getContentStream(),lengthIfKnown,lastMod);
+				}
+			}
+			public void setContentStream(InputStream st, Long lengthIfKnown, Long lastMod) throws IOException {
+				setContentStream(st, lengthIfKnown!=null?lengthIfKnown.intValue():null);
+			}
 			public void setContentStream(InputStream st, Integer lengthIfKnown) throws IOException{
 				try(OutputStream os=setContentStream()){
 					if(lengthIfKnown!=null && lengthIfKnown>(largeSize)){
@@ -494,7 +513,7 @@ public class BinStores {
 					return o==null;
 				}
 				@Override
-				public long getLength() {
+				public Long getLength() {
 					return getContent()!=null ? getContent().length : 0L;
 				}
 			};
@@ -559,6 +578,13 @@ public class BinStores {
 					return new FileOutputStream(file,false);
 				}
 				@Override
+				public void setContentStream(InputStream st, Long lengthIfKnown, Long lastMod) throws IOException {
+					File prnt=file.getParentFile();
+					if(!prnt.exists()) prnt.mkdirs();
+					setContentStream(st, lengthIfKnown!=null?lengthIfKnown.intValue():null);
+					if(lastMod!=null) file.setLastModified(lastMod);
+				}
+				@Override
 				public boolean delete() {
 					return file.delete();
 				}
@@ -573,11 +599,11 @@ public class BinStores {
 					return true;
 				}
 				@Override
-				public long getLastModified() {
+				public Long getLastModified() {
 					return file.lastModified();
 				}
 				@Override
-				public long getLength() {
+				public Long getLength() {
 					return file.length();
 				}
 			};
