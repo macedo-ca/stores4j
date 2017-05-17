@@ -24,6 +24,7 @@ import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -33,6 +34,8 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+
+import ca.macedo.stores4j.BaseStore.Proxy;
 
 public class BinStoresWithS3 extends BinStores{
 	@Override
@@ -58,10 +61,23 @@ public class BinStoresWithS3 extends BinStores{
 				String bucket=parts[1];
 				String folder = parts.length>2 ? parts[2] : "";
 				
+				
+				
 				AWSCredentials credentials = new BasicAWSCredentials(accessKey, secretKey);
 				AmazonS3ClientBuilder bld = AmazonS3Client.builder()
 						.withRegion(region)
 						.withCredentials((new AWSStaticCredentialsProvider(credentials)));
+				
+				String prox=mainStores.defaultCredentials("proxy");
+				if(prox!=null){
+					Proxy pr = new Proxy(prox);
+					ClientConfiguration cc=new ClientConfiguration();
+					cc.setProxyHost(pr.host);
+					cc.setProxyUsername(pr.user);
+					cc.setProxyPassword(pr.pwd);
+					if(pr.port!=null) cc.setProxyPort(new Integer(pr.port));
+					bld.withClientConfiguration(cc);
+				}
 				
 				AmazonS3 s3Client = bld.build();
 				
@@ -103,7 +119,8 @@ public class BinStoresWithS3 extends BinStores{
 		private Collection<String> list0(Filter f) {
 			LinkedList<String> out=new LinkedList<String>();
 			int fl=folder.length();
-			for(S3ObjectSummary os : s3Client.listObjects(bucket, folder+(f.filterPrefix!=null?f.filterPrefix:"")).getObjectSummaries()){
+			String pre=folder+(f.filterPrefix!=null?f.filterPrefix:"");
+			for(S3ObjectSummary os : s3Client.listObjects(bucket, pre).getObjectSummaries()){
 				String k = os.getKey().substring(fl);
 				if(f.match(k)) out.add(k);
 			}
@@ -161,7 +178,7 @@ public class BinStoresWithS3 extends BinStores{
 					return true;
 				}
 				@Override
-				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
+				public void loadTo(Consumer<LoadedBinary> consumer) throws IOException {
 					S3Object obj=s3Client.getObject(bucket, key);
 					ObjectMetadata md=obj.getObjectMetadata();
 					LoadedBinary lb=new LoadedBinary();
