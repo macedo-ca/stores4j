@@ -22,8 +22,11 @@ import java.lang.ref.WeakReference;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +46,7 @@ import ca.macedo.stores4j.BinStores.BinStore.BinStoreVisit;
 public class BinStores {
 	private static Logger log=LoggerFactory.getLogger(BinStores.class);
 	static Charset UTF_8=Charset.forName("UTF-8");
-	
+	static SimpleDateFormat dateFormat=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
 	static BinStores sambaFactory=null;
 	static BinStores s3Factory=null;
 	static{
@@ -164,7 +167,9 @@ public class BinStores {
 		return null;
 	}
 	protected String defaultCredentials(String storeType){
-		return findSecretValue("DEFAULT:"+storeType.toUpperCase());
+		String out=findSecretValue("DEFAULT:"+storeType.toUpperCase());
+		if(out.contains(secretKeyWord)) out=applySecrets(out);
+		return out;
 	}
 	
 	protected interface PartOfVisit{
@@ -233,11 +238,43 @@ public class BinStores {
 				throw new RuntimeException(e);
 			}
 		}
-		public void forEachFiltered(Consumer<BinRef> r, String filter){
+		public void forEach(String filter, Consumer<BinRef> r){
 			try{
 				runVisit((visit)->{
 					for(String s : filter(filter)){
 						r.accept(item(visit,s));
+					}
+				});
+			}catch(Exception e){
+				throw new RuntimeException(e);
+			}
+		}
+		public void forEachSince(String ts, Consumer<BinRef> r) throws ParseException{
+			forEachSince(dateFormat.parse(ts).getTime(), r);
+		}
+		public void forEachSince(String ts, String filter, Consumer<BinRef> r) throws ParseException{
+			forEachSince(dateFormat.parse(ts).getTime(), filter, r);
+		}
+		public void forEachSince(long timestamp, Consumer<BinRef> r){
+			try{
+				runVisit((visit)->{
+					for(String s : list()){
+						BinRef br=item(visit,s);
+						Long l=br.getLastModified();
+						if(l==null || l>timestamp) r.accept(br);
+					}
+				});
+			}catch(Exception e){
+				throw new RuntimeException(e);
+			}
+		}
+		public void forEachSince(long timestamp, String filter, Consumer<BinRef> r){
+			try{
+				runVisit((visit)->{
+					for(String s : filter(filter)){
+						BinRef br=item(visit,s);
+						Long l=br.getLastModified();
+						if(l==null || l>timestamp) r.accept(br);
 					}
 				});
 			}catch(Exception e){
@@ -385,7 +422,16 @@ public class BinStores {
 			public boolean supportsLoading(){
 				return false;
 			}
-			public void consume(Consumer<LoadedBinary> consumer) throws IOException {
+			public MetaData getMetaData(){
+				MetaData d=new MetaData();
+				d.setId(getID());
+				d.setLastModified(getLastModified());
+				d.setEtag(getETag());
+				d.setStore(BinStore.this);
+				d.setLength(getLength());
+				return d;
+			}
+			public void loadTo(Consumer<LoadedBinary> consumer) throws IOException {
 				throw new RuntimeException("Not supported by "+this.getClass().getName());
 			}
 			
@@ -400,6 +446,10 @@ public class BinStores {
 			public Long getLastModified(){
 				return null;
 			}
+			public Date getLastModifiedDate(){
+				Long l=getLastModified();
+				return l!=null ? new Date(l) : null;
+			}
 			public String getETag(){
 				return null;
 			}
@@ -408,7 +458,7 @@ public class BinStores {
 			public abstract void setContent(byte[] content) throws IOException;
 			public void copyFrom(BinRef other) throws IOException {
 				if(other.supportsLoading()){
-					other.consume(bin ->{
+					other.loadTo(bin ->{
 						try {
 							setContentStream(other.getContentStream(),bin.getLength(),bin.getLastModified());
 						} catch (IOException e) {
@@ -452,7 +502,13 @@ public class BinStores {
 			}
 			public abstract boolean delete();
 			public abstract boolean rename(String newID);
-			public abstract boolean createWithContent(byte[] content) throws IOException;
+			public boolean createWithContent(byte[] content) throws IOException{
+				if(!has(getID())){
+					setContent(content);
+					return true;
+				}
+				return false;
+			}
 		}
 	}
 	
