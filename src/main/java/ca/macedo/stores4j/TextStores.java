@@ -34,6 +34,7 @@ import org.json.simple.parser.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import ca.macedo.stores4j.BaseStore.MetaData;
 import ca.macedo.stores4j.BinStores.BinStore;
 import ca.macedo.stores4j.BinStores.BinStore.BinRef;
 import ca.macedo.stores4j.StoresJSONBuilder.JSONArrRoot;
@@ -352,15 +353,19 @@ public class TextStores {
 			}
 		}
 	}
-	public static abstract class TextStore implements Closeable{
+	public static abstract class TextStore extends BaseStore implements Closeable{
 		String suffix=null;
 		public void close(){
 			// noop
 		}
+		
+		
 		public abstract Collection<String> list();
 		public abstract boolean has(String id);
 		public Collection<String> filter(String filter) {
-			return BaseStore.prepareFilter("",filter,"",suffix).filter(list());
+			LinkedList<String> out=new LinkedList<String>();
+			for(String k : list()) if(k.startsWith(filter)) out.add(k);
+			return out;
 		}
 		public void copyTo(TextStore store){
 			Collection<String> list=list();
@@ -375,6 +380,17 @@ public class TextStores {
 			}
 		}
 		public abstract class TextRef{
+
+			public MetaData getMetaData(){
+				MetaData d=new MetaData();
+				d.setId(getID());
+//				d.setLastModified(getLastModified());
+//				d.setEtag(getETag());
+				d.setStore(TextStore.this);
+				String s=getContent();
+				d.setLength(s!=null ? new Long(s.getBytes(UTF_8).length) : null);
+				return d;
+			}
 			public boolean exist(){
 				return TextStore.this.has(getID());
 			}
