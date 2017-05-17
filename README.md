@@ -191,13 +191,13 @@ fileStore.forEach( entry -> {
 		e.printStackTrace();
 	}
 } );
-fileStore.forEachFiltered( entry -> {
+fileStore.forEach( "*.txt", entry -> {
 	try {
 		System.out.println(entry.getID() +", size " + entry.getContent().length + " bytes");
 	} catch (IOException e) {
 		e.printStackTrace();
 	}
-} , "*.txt");
+});
 
 // 3. Read / Write bytes
 byte[] pictureData=fileStore.item("test.jpg").getContent();
@@ -212,7 +212,7 @@ try(InputStream is=fileStore.item("test.jpg").getContentStream()){
 // 5. Bulk operations - Copy / Replicate
 BinStore fileStoreCopy = binStores.getStore("file://C:/temp/copyOfTemp/");
 fileStore.copyTo(fileStoreCopy);
-// The difference between copy and replica is that replica removes any entries in the target that is not found in the source.
+// The difference between copy and replica is that replica removes any entries not in the original
 BinStore fileStoreReplica = binStores.getStore("file://C:/temp/replicaOfTemp/");
 fileStore.replicateTo(fileStoreReplica);
 ```
