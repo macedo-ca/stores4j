@@ -27,7 +27,6 @@ import javax.sql.DataSource;
 
 import org.apache.commons.codec.binary.Base64;
 
-import ca.macedo.stores4j.BaseStore.Filter;
 
 public class BinStoresWithDB extends BinStores {
 	protected static class DBObjects{
