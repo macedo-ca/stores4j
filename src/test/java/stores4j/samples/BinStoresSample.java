@@ -25,13 +25,13 @@ public class BinStoresSample {
 				e.printStackTrace();
 			}
 		} );
-		fileStore.forEachFiltered( entry -> {
+		fileStore.forEach( "*.txt", entry -> {
 			try {
 				System.out.println(entry.getID() +", size " + entry.getContent().length + " bytes");
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-		} , "*.txt");
+		});
 		
 		// 3. Read / Write bytes
 		byte[] pictureData=fileStore.item("test.jpg").getContent();
