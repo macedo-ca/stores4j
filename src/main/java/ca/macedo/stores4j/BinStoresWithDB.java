@@ -10,10 +10,9 @@
  *****************************************************************************/
 package ca.macedo.stores4j;
 
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -26,12 +25,17 @@ import java.util.function.Consumer;
 
 import javax.sql.DataSource;
 
+import org.apache.commons.codec.binary.Base64;
+
+import ca.macedo.stores4j.BaseStore.Filter;
+
 public class BinStoresWithDB extends BinStores {
 	protected static class DBObjects{
 		protected String TABLE="BINARIES", NAME="FNAME", GROUP="FGROUP", FOLDER="FFOLDER", DATA="FDATA",
 			   CREATED="FCREATED",UPDATED="FUPDATED",ID="FID",SIZE="FSIZE";
 	}
 	protected static DBObjects OBJ=new DBObjects();
+	static SecureRandom randomizer=new SecureRandom();
 	
 	static BinStoresWithDB inst=new BinStoresWithDB();
 	public static BinStore newDBStore(String conStr, String grp) {
@@ -77,25 +81,37 @@ public class BinStoresWithDB extends BinStores {
 		}
 		
 		protected Collection<String> list(BinStoreVisit visit){
-			return list0(((DBVisit)visit).con);
+			return list0(((DBVisit)visit).con,baseFilter);
 		}
 		@Override
-		public Collection<String> list(){
+		public Collection<String> filter(String filter) {
 			try(Connection con = getCon()){
-				return list0(con);
+				return list0(con,prepareFilter("", filter));
 			}catch(SQLException e){
 				throw new RuntimeException(e);
 			}
 		}
-		
-		private Collection<String> list0(Connection con) {
+		@Override
+		public Collection<String> list() {
+			try(Connection con = getCon()){
+				return list0(con,baseFilter);
+			}catch(SQLException e){
+				throw new RuntimeException(e);
+			}
+		}
+		private Collection<String> list0(Connection con, Filter f) {
 			LinkedList<String> out=new LinkedList<String>();
 			PreparedStatement ps=null;
 			ResultSet rs=null;
 			try{
-				String sql="SELECT "+n.NAME+" FROM "+n.TABLE+" WHERE "+n.GROUP+"=? "+(folder!=null?" AND "+n.FOLDER+"=?":"")+" ORDER BY "+n.NAME+"";
+				String sql=
+						"SELECT "+n.NAME+" FROM "+n.TABLE+" WHERE "+n.GROUP+"=? "
+						+(folder!=null?" AND "+n.FOLDER+"=?":"")
+						+(!f.all()?" AND "+n.NAME+" LIKE ?":"")
+						+" ORDER BY "+n.NAME+"";
 				ps=con.prepareStatement(sql);
 				ps.setString(1, fileGroup);
+				if(!f.all()) ps.setString(2, f.wildCardFilter().replace('*','%'));
 				if(folder!=null) ps.setString(2, folder);
 				rs=ps.executeQuery();
 				while(rs.next()){
@@ -286,7 +302,7 @@ public class BinStoresWithDB extends BinStores {
 					return true;
 				}
 				@Override
-				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
+				public void loadTo(Consumer<LoadedBinary> consumer) throws IOException {
 					LoadedBinary lb=new LoadedBinary();
 					lb.id=fileName;
 					lb.visit=visit;
@@ -422,54 +438,39 @@ public class BinStoresWithDB extends BinStores {
 					}
 				}
 				@Override
-				public OutputStream setContentStream() throws IOException {
+				public void setContentStream(InputStream st, Integer lengthIfKnown) throws IOException{
+					setContentStream(st,(lengthIfKnown!=null?lengthIfKnown.longValue():null),System.currentTimeMillis());
+				}
+				@Override
+				public void setContentStream(InputStream st, Long lengthIfKnown, Long lastMod) throws IOException {
 					PreparedStatement ps=null;
-					ResultSet rs=null;
 					Connection con = null;
 					try{
 						con=inVisit() ? visitAs(DBVisit.class).con : getCon();
-						OutputStream os = null;
-						java.sql.Blob binary = null;
-						
-						String readBLOB="SELECT "+n.DATA+" " +
-						" FROM "+n.TABLE+" " +
-						" WHERE "+n.GROUP+"=? AND "+n.NAME+"=? " +(folder!=null?" AND "+n.FOLDER+"=?":"") +
-						" FOR UPDATE";
-						ps = con.prepareStatement(readBLOB);
-						ps.setString(1, fileGroup);
-						ps.setString(2, fileName);
-						if(folder!=null) ps.setString(3, folder);
-						rs = ps.executeQuery();
-						if(!rs.next()){
-							BinStoresWithDB.close(null,ps,rs);
-							String sql="INSERT INTO "+n.TABLE+" ("+n.CREATED+","+n.UPDATED+","+n.ID+","+n.GROUP+","+n.NAME+","+n.SIZE+","+n.DATA+"" +(folder!=null?","+n.FOLDER+"":"")+") VALUES (SYSDATE,SYSDATE,?,?,?,0,EMPTY_BLOB()" +(folder!=null?",?":"")+")";
-							ps= con.prepareStatement(sql);
-							ps.setString(1, guid(32));
-							ps.setString(2, fileGroup);
-							ps.setString(3, fileName);
-							if(folder!=null) ps.setString(4, folder);
+						Timestamp ts=lastMod!=null ? new Timestamp(lastMod) : new Timestamp(System.currentTimeMillis());
+						if(has0(con,id)){
+							ps= con.prepareStatement("UPDATE "+n.TABLE+" SET "+n.UPDATED+"=?, "+n.DATA+"=?, "+n.SIZE+"=? WHERE "+n.GROUP+"=? AND "+n.NAME+"=? "+(folder!=null?" AND "+n.FOLDER+"=?":""));
+							ps.setTimestamp(1, ts);
+							ps.setBinaryStream(2, st);
+							ps.setLong(3, lengthIfKnown);
+							ps.setString(4, fileGroup);
+							ps.setString(5, fileName);
+							if(folder!=null) ps.setString(6, folder);
 							ps.executeUpdate();
-							ps.close();
-							ps = con.prepareStatement(readBLOB);
-							ps.setString(1, fileGroup);
-							ps.setString(2, fileName);
-							if(folder!=null) ps.setString(3, folder);
-							rs = ps.executeQuery();
-							rs.next();
+						}else{
+							String sql="INSERT INTO "+n.TABLE+" ("+n.CREATED+","+n.UPDATED+","+n.ID+","+n.GROUP+","+n.NAME+","+n.SIZE+","+n.DATA+""+(folder!=null?","+n.FOLDER+"":"")+") VALUES (?,?,?,?,?,?,?"+(folder!=null?",?":"")+")";
+							ps= con.prepareStatement(sql);
+							ps.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
+							ps.setTimestamp(2, ts);
+							ps.setString(3, guid(32));
+							ps.setString(4, fileGroup);
+							ps.setString(5, fileName);
+							ps.setLong(6, lengthIfKnown);
+							ps.setBinaryStream(7, st);
+							if(folder!=null) ps.setString(8, folder);
+							ps.executeUpdate();
 						}
-						binary = rs.getBlob(1);
-						final Connection lclCon=(!inVisit() ? con : null);
-						final PreparedStatement lclPS=ps;
-						final ResultSet lclRS=rs;
-						os = new BufferedOutputStream(binary.setBinaryStream(0)){
-							@Override
-							public void close() throws IOException {
-								super.close();
-								BinStoresWithDB.close(lclCon,lclPS,lclRS);
-							}
-						};
-						return os;
-					} catch (SQLException e) {
+					}catch(SQLException e){
 						throw new IOException(e);
 					}finally{
 						if(inVisit()) con=null;
@@ -477,8 +478,7 @@ public class BinStoresWithDB extends BinStores {
 					}
 				}
 				private String guid(int i) {
-					// TODO fix
-					return "T"+System.nanoTime()+""+((int)(Math.random()*1000));
+					return Base64.encodeBase64URLSafeString(randomizer.generateSeed(i));
 				}
 			};
 		}
