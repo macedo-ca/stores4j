@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
-import java.util.Date;
 import java.util.LinkedList;
 import java.util.function.Consumer;
 
@@ -162,7 +161,7 @@ public class BinStoresWithSamba extends BinStores{
 					return true;
 				}
 				@Override
-				public void consume(Consumer<LoadedBinary> consumer) throws IOException {
+				public void loadTo(Consumer<LoadedBinary> consumer) throws IOException {
 					LoadedBinary lb = new LoadedBinary();
 					lb.setLastModified(file.lastModified());
 					try(InputStream data=file.getInputStream()){
