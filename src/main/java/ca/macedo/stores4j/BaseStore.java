@@ -16,7 +16,7 @@ import java.util.LinkedList;
 
 import ca.macedo.stores4j.BinStores.BinStore;
 
-public class BaseStore {
+public abstract class BaseStore {
 	public String getPrefix() {
 		return prefix;
 	}
@@ -35,7 +35,9 @@ public class BaseStore {
 	String suffix0=null;
 	
 	protected Filter baseFilter=new Filter();
-	
+	public abstract Collection<String> filter(String filter);
+	public abstract Collection<String> list();
+
 	public Filter prepareFilter(String storeTypePrefix, String filter){
 		return prepareFilter(storeTypePrefix, filter, prefix, suffix0);
 	}
@@ -110,7 +112,46 @@ public class BaseStore {
 			this.other = other;
 		}
 	}
-
+	public static class Proxy{
+		public Proxy(){}
+		public Proxy(String settings){
+			int idx=settings.indexOf('@');
+			String hostport=null;
+			if(idx>-1){
+				String up=settings.substring(0, idx);
+				hostport=settings.substring(idx+1);
+				idx=up.indexOf(':');
+				user=up.substring(0,idx);
+				pwd=up.substring(idx+1);
+				user=user.replace(';', '\\');
+			}else{
+				hostport=settings;
+			}
+			idx=hostport.indexOf(':');
+			if(idx>-1){
+				host=hostport.substring(0, idx);
+				port=hostport.substring(idx+1);
+			}else{
+				host=hostport;
+			}
+		}
+		public void setUser(String user) {
+			this.user = user;
+		}
+		public void setPwd(String pwd) {
+			this.pwd = pwd;
+		}
+		public void setHost(String host) {
+			this.host = host;
+		}
+		public void setPort(String port) {
+			this.port = port;
+		}
+		String user=null;
+		String pwd=null;
+		String host=null;
+		String port="8080";
+	}
 	public static class Filter{
 		protected boolean all(){
 			return filterPrefix==null && filterSuffix==null;
@@ -118,9 +159,11 @@ public class BaseStore {
 		Filter(){}
 		Filter(String pre, String suf){
 			filterPrefix=pre;
+			filterPrefixLow=(pre!=null?pre.toLowerCase():null);
 			filterSuffix=suf;
 		}
 		String filterPrefix=null;
+		String filterPrefixLow=null;
 		String filterSuffix=null;
 		protected Collection<String> filter(Collection<String> list){
 			Collection<String> out=new LinkedList<String>();
@@ -132,7 +175,7 @@ public class BaseStore {
 		}
 		protected boolean match(String entry){
 			String sLowCase=entry.toLowerCase();
-			return ((filterPrefix==null || (sLowCase.startsWith(filterPrefix))) && (filterSuffix==null || (sLowCase.endsWith(filterSuffix))));
+			return ((filterPrefixLow==null || (sLowCase.startsWith(filterPrefixLow))) && (filterSuffix==null || (sLowCase.endsWith(filterSuffix))));
 		}
 		public String wildCardFilter() {
 			return (filterPrefix!=null?filterPrefix:"") + "*" + (filterSuffix!=null?filterSuffix:"");
