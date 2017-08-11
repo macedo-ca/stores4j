@@ -168,7 +168,7 @@ public class BinStores {
 	}
 	protected String defaultCredentials(String storeType){
 		String out=findSecretValue("DEFAULT:"+storeType.toUpperCase());
-		if(out.contains(secretKeyWord)) out=applySecrets(out);
+		if(out!=null && out.contains(secretKeyWord)) out=applySecrets(out);
 		return out;
 	}
 	
